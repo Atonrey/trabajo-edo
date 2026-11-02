@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Registro de nivel sonoro</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1d1d1b;--mut:#6b6a64;--line:#dcdad2;--ac:#c2410c;--ac2:#1d4ed8;--ok:#15803d;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171716;--card:#232321;--tx:#ecebe6;--mut:#a3a29b;--line:#3a3a36;--ac:#fb923c;--ac2:#7aa2ff;--ok:#4ade80;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#171716;--card:#232321;--tx:#ecebe6;--mut:#a3a29b;--line:#3a3a36;--ac:#fb923c;--ac2:#7aa2ff;--ok:#4ade80;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:14px}
+h1{font-size:20px;margin:4px 0 2px}
+.sub{color:var(--mut);font-size:13px;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.big{font-size:56px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.big small{font-size:18px;color:var(--mut);font-weight:500}
+.tm{font-size:22px;font-variant-numeric:tabular-nums;color:var(--mut)}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--tx);border-radius:10px;padding:10px 12px;cursor:pointer;min-height:44px}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
+button.ev{flex:1 1 45%}
+button:disabled{opacity:.45;cursor:default}
+input[type=number],input[type=text]{font:inherit;border:1px solid var(--line);background:var(--bg);color:var(--tx);border-radius:10px;padding:10px;width:100%;min-height:44px}
+label{font-size:13px;color:var(--mut);display:block;margin-bottom:4px}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{flex:1;border:0;border-radius:0}
+.seg button.on{background:var(--ac2);color:#fff}
+canvas{width:100%;height:190px;display:block}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center;font-size:12px;color:var(--mut)}
+.stats b{display:block;font-size:17px;color:var(--tx)}
+.tw{max-height:220px;overflow:auto;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
+.note{font-size:12.5px;color:var(--mut)}
+.warn{color:var(--ac);white-space:pre-wrap;word-break:break-word}
+.chip{display:inline-block;background:var(--ac);color:#fff;border-radius:99px;padding:2px 10px;font-size:13px}
+textarea{width:100%;height:110px;font:12px monospace;background:var(--bg);color:var(--tx);border:1px solid var(--line);border-radius:8px}
+</style>
+</head>
+<body>
+<main>
+<h1>🎙️ Registro de nivel sonoro</h1>
+<p class="sub">Una lectura por segundo, con registro de acontecimientos y exportación a CSV.</p>
+
+<div class="card">
+  <div class="seg" id="modes">
+    <button id="mMic" class="on">Micrófono (automático)</button>
+    <button id="mMan">Manual (otra app)</button>
+  </div>
+  <p class="note" id="modeNote" style="margin:8px 0 0">El micrófono del celular no está calibrado. Ajusta el valor con un sonómetro de referencia (ver abajo) y usa siempre el mismo equipo.</p>
+</div>
+
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <div class="big"><span id="lvl">--</span> <small>dB</small></div>
+    <div class="tm" id="clock">0 s</div>
+  </div>
+  <div id="manBox" hidden style="margin-top:10px">
+    <label for="man">Valor leído en tu sonómetro (dB)</label>
+    <div class="row"><input id="man" type="number" inputmode="decimal" step="0.1" style="flex:1"><button class="p" id="addMan">Registrar</button></div>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button class="p" id="start" style="flex:2">▶ Iniciar</button>
+    <button id="stop" style="flex:1" disabled>■ Detener</button>
+  </div>
+  <p class="note warn" id="msg" style="margin:8px 0 0"></p>
+</div>
+
+<div class="card"><label>Alternativa si el micrófono está bloqueado: analizar un audio grabado</label>
+  <p class="note" style="margin:0 0 8px">Graba con la app de grabadora del celular y súbela aquí. Se calcula una lectura por segundo en tu dispositivo; el audio no se envía a ningún sitio. Luego agrega los acontecimientos indicando el segundo.</p>
+  <input id="aud" type="file" accept="audio/*"></div>
+
+<div class="card">
+  <label>Acontecimientos (se asocian a la siguiente lectura)</label>
+  <div class="row" id="evs">
+    <button class="ev">Calma / fondo</button><button class="ev">Bus se acerca</button><button class="ev">Bus pasa</button>
+    <button class="ev">Bocina</button><button class="ev">Cruce cerrado</button><button class="ev">Cruce abierto</button>
+  </div>
+  <div class="row" style="margin-top:8px"><input id="evT" type="number" inputmode="numeric" placeholder="seg" style="width:80px" title="Segundo (opcional, para audio analizado)"><input id="evOther" type="text" placeholder="Otro acontecimiento…" style="flex:1"><button id="evAdd">Agregar</button></div>
+  <p class="note" style="margin:8px 0 0">Pendiente: <span id="pend" class="chip" hidden></span><span id="pend0">ninguno</span></p>
+</div>
+
+<div class="card">
+  <canvas id="cv"></canvas>
+  <div class="stats" style="margin-top:8px">
+    <div><b id="sN">0</b>lecturas</div><div><b id="sMin">--</b>mín (dB)</div><div><b id="sMax">--</b>máx (dB)</div><div><b id="sBg">--</b>fondo* (dB)</div>
+  </div>
+  <p class="note" style="margin:6px 0 0">*Fondo ≈ percentil 10 de las lecturas: candidato a valor de equilibrio y<sub>e</sub>.</p>
+</div>
+
+<div class="card">
+  <div class="tw"><table><thead><tr><th>t (s)</th><th>dB</th><th>Acontecimiento</th></tr></thead><tbody id="tb"></tbody></table></div>
+  <div class="row" style="margin-top:10px">
+    <button class="p" id="exp" style="flex:2">⬇ Exportar CSV</button>
+    <button id="undo">Deshacer última</button>
+    <button id="clr">Borrar todo</button>
+  </div>
+  <div id="csvBox" hidden style="margin-top:8px"><p class="note">No se pudo guardar el archivo. Copia el texto y pégalo en Excel o en un archivo .csv:</p><textarea id="csv" readonly></textarea></div>
+</div>
+
+<div class="card" id="calCard">
+  <label>Calibración del micrófono</label>
+  <div class="row"><div style="flex:1"><label for="off" style="font-size:12px">Ajuste (dB)</label><input id="off" type="number" step="0.5" value="90"></div>
+  <div style="flex:2"><label for="ref" style="font-size:12px">Valor de un sonómetro de referencia (dB)</label><div class="row"><input id="ref" type="number" step="0.1" style="flex:1"><button id="cal">Calibrar</button></div></div></div>
+  <p class="note" style="margin:8px 0 0">Pon ambos equipos juntos con un sonido estable, escribe el valor de referencia y presiona Calibrar. Sin ponderación A: los valores son aproximados y sirven para comparar dentro de una misma sesión.</p>
+</div>
+
+<p class="note">Privacidad: la app solo calcula niveles; no graba ni guarda audio. Evita medir cerca de la calzada y no registres rostros ni patentes.</p>
+</main>
+
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var mode='mic',run=false,t0=0,rows=[],pend=[],stream=null,ac=null,an=null,buf=null,sumSq=0,nS=0,lastRaw=null,iv=null,fast=null,lastShown=null,clrArm=0;
+function save(){try{localStorage.setItem('ruido_rows',JSON.stringify(rows))}catch(e){}}
+try{var s=localStorage.getItem('ruido_rows');if(s)rows=JSON.parse(s)||[]}catch(e){}
+function msg(t){$('msg').textContent=t||''}
+function setMode(m){mode=m;$('mMic').className=m==='mic'?'on':'';$('mMan').className=m==='man'?'on':'';
+ $('manBox').hidden=m!=='man';$('calCard').hidden=m!=='mic';
+ $('modeNote').textContent=m==='mic'?'El micrófono del celular no está calibrado. Ajusta el valor con un sonómetro de referencia y usa siempre el mismo equipo.':'Mide con tu app de sonómetro y escribe cada valor aquí; el tiempo lo registra esta app. Para una lectura por segundo, el modo micrófono es más práctico.'}
+$('mMic').onclick=function(){if(!run)setMode('mic')};
+$('mMan').onclick=function(){if(!run)setMode('man')};
+function elapsed(){return Math.floor((Date.now()-t0)/1000)}
+function addRow(t,v){rows.push({t:t,v:v,e:pend.join('; ')});pend=[];save();render()}
+function render(){
+ var p=pend.join(' + ');$('pend').textContent=p;$('pend').hidden=!p;$('pend0').hidden=!!p;
+ var tb=$('tb');tb.innerHTML='';
+ rows.slice(-60).reverse().forEach(function(r){var tr=document.createElement('tr');
+  [r.t,r.v===null?'':r.v.toFixed(1),r.e].forEach(function(x){var td=document.createElement('td');td.textContent=x;tr.appendChild(td)});tb.appendChild(tr)});
+ var vs=rows.filter(function(r){return r.v!==null}).map(function(r){return r.v});
+ $('sN').textContent=vs.length;
+ if(vs.length){var so=vs.slice().sort(function(a,b){return a-b});
+  $('sMin').textContent=so[0].toFixed(1);$('sMax').textContent=so[so.length-1].toFixed(1);
+  $('sBg').textContent=so[Math.floor(0.1*(so.length-1))].toFixed(1)}else{$('sMin').textContent=$('sMax').textContent=$('sBg').textContent='--'}
+ draw()}
+function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
+function draw(){
+ var c=$('cv'),d=window.devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*d;c.height=h*d;
+ var g=c.getContext('2d');g.scale(d,d);g.clearRect(0,0,w,h);
+ var pts=rows.filter(function(r){return r.v!==null});
+ g.font='11px system-ui';g.fillStyle=css('--mut');
+ if(pts.length<2){g.fillText('El gráfico aparecerá al registrar lecturas',10,h/2);return}
+ var tmin=rows[0].t,tmax=Math.max(rows[rows.length-1].t,tmin+10);
+ var lo=Math.floor(Math.min.apply(null,pts.map(function(r){return r.v}))/5)*5-5,hi=Math.ceil(Math.max.apply(null,pts.map(function(r){return r.v}))/5)*5+5;
+ var L=34,B=18,T=6,R=6,X=function(t){return L+(t-tmin)/(tmax-tmin)*(w-L-R)},Y=function(v){return T+(hi-v)/(hi-lo)*(h-T-B)};
+ g.strokeStyle=css('--line');g.lineWidth=1;
+ for(var v=lo;v<=hi;v+=Math.max(5,Math.ceil((hi-lo)/5/5)*5)){g.beginPath();g.moveTo(L,Y(v));g.lineTo(w-R,Y(v));g.stroke();g.fillText(v,2,Y(v)+4)}
+ g.fillText(tmin+' s',L,h-4);g.fillText(tmax+' s',w-R-34,h-4);
+ rows.forEach(function(r){if(r.e){g.strokeStyle=css('--ac');g.setLineDash([3,3]);g.beginPath();g.moveTo(X(r.t),T);g.lineTo(X(r.t),h-B);g.stroke();g.setLineDash([])}});
+ g.strokeStyle=css('--ac2');g.lineWidth=2;g.beginPath();
+ pts.forEach(function(r,i){i?g.lineTo(X(r.t),Y(r.v)):g.moveTo(X(r.t),Y(r.v))});g.stroke()}
+window.addEventListener('resize',draw);
+function tick(){
+ var t=elapsed();$('clock').textContent=t+' s';
+ if(mode==='mic'&&nS>0){var db=10*Math.log10(sumSq/nS+1e-12);lastRaw=db;
+  var v=db+parseFloat($('off').value||0);sumSq=0;nS=0;lastShown=v;$('lvl').textContent=v.toFixed(1);addRow(t,Math.round(v*10)/10)}}
+function sampleAudio(){if(!an)return;an.getFloatTimeDomainData(buf);var s=0;for(var i=0;i<buf.length;i++)s+=buf[i]*buf[i];sumSq+=s/buf.length;nS++}
+function diag(e){var pp='n/d',fr;try{var p=document.permissionsPolicy||document.featurePolicy;if(p&&p.allowsFeature)pp=p.allowsFeature('microphone')?'permitido':'BLOQUEADO'}catch(x){}
+ try{fr=window.self!==window.top?'sí (iframe)':'no'}catch(x){fr='sí (iframe)'}
+ msg('Error exacto: '+((e&&e.name)||'?')+' — '+((e&&e.message)||'sin mensaje')+'\nContexto seguro (https): '+window.isSecureContext+'\nPolítica de micrófono de la página: '+pp+'\nDentro de un iframe: '+fr+'\nSi aparece NotAllowedError o BLOQUEADO, el marco que aloja la página no concede el micrófono. Usa “Analizar un audio grabado” o el modo Manual.')}
+$('start').onclick=function(){
+ if(run)return;
+ if(rows.length&&!window.__cont){ }
+ var go=function(){run=true;t0=Date.now()-(rows.length?(rows[rows.length-1].t+1)*1000:0);
+  $('start').disabled=true;$('stop').disabled=false;$('mMic').disabled=$('mMan').disabled=true;
+  iv=setInterval(tick,1000);if(mode==='mic')fast=setInterval(sampleAudio,40);msg('')};
+ if(mode==='man'){go();return}
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){diag({name:'SinMediaDevices',message:'navigator.mediaDevices no existe (contexto no seguro o bloqueado)'});return}
+ navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}).then(function(st){
+  stream=st;ac=new (window.AudioContext||window.webkitAudioContext)();var src=ac.createMediaStreamSource(st);
+  an=ac.createAnalyser();an.fftSize=2048;buf=new Float32Array(an.fftSize);src.connect(an);go()
+ }).catch(function(e){diag(e)})};
+$('stop').onclick=function(){
+ run=false;clearInterval(iv);clearInterval(fast);
+ if(stream){stream.getTracks().forEach(function(t){t.stop()});stream=null}
+ if(ac){ac.close();ac=null;an=null}
+ if(pend.length)addRow(elapsed(),null);
+ $('start').disabled=false;$('stop').disabled=true;$('mMic').disabled=$('mMan').disabled=false;$('start').textContent='▶ Continuar';render()};
+$('addMan').onclick=function(){
+ if(!run){msg('Presiona Iniciar primero.');return}
+ var v=parseFloat($('man').value);if(isNaN(v)){msg('Escribe un valor en dB.');return}
+ msg('');$('lvl').textContent=v.toFixed(1);addRow(elapsed(),v)};
+$('man').addEventListener('keydown',function(e){if(e.key==='Enter')$('addMan').click()});
+function addEv(t){t=(t||'').trim();if(!t)return;var s=$('evT').value;
+ if(s!==''){var r=rows.filter(function(x){return x.t===parseInt(s,10)})[0];if(!r){msg('No hay lectura en el segundo '+s+'.');return}r.e=r.e?r.e+'; '+t:t;save();render();return}
+ pend.push(t);render()}
+Array.prototype.forEach.call(document.querySelectorAll('#evs .ev'),function(b){b.onclick=function(){addEv(b.textContent)}});
+$('evAdd').onclick=function(){addEv($('evOther').value);$('evOther').value=''};
+$('evOther').addEventListener('keydown',function(e){if(e.key==='Enter')$('evAdd').click()});
+$('cal').onclick=function(){var r=parseFloat($('ref').value);if(isNaN(r)||lastRaw===null){msg('Inicia la medición y escribe el valor de referencia.');return}
+ $('off').value=(r-lastRaw).toFixed(1);msg('Ajuste actualizado: '+$('off').value+' dB (se aplica a las próximas lecturas).')};
+$('aud').onchange=function(){var inp=this,f=inp.files&&inp.files[0];if(!f)return;msg('Analizando audio…');
+ f.arrayBuffer().then(function(b){var C=window.AudioContext||window.webkitAudioContext,c=new C();
+  return c.decodeAudioData(b).then(function(a){c.close();var d=a.getChannelData(0),sr=a.sampleRate,n=Math.floor(d.length/sr),o=parseFloat($('off').value||0),t=rows.length?rows[rows.length-1].t+1:0;
+   for(var s=0;s<n;s++){var q=0;for(var i=s*sr;i<(s+1)*sr;i++)q+=d[i]*d[i];var db=10*Math.log10(q/sr+1e-12)+o;rows.push({t:t+s,v:Math.round(db*10)/10,e:''})}
+   save();render();msg('Listo: '+n+' lecturas (1 por segundo). Agrega acontecimientos escribiendo el segundo en el campo “seg”.')})
+ }).catch(function(e){msg('No se pudo leer el audio: '+((e&&e.name)||'')+' '+((e&&e.message)||''))});inp.value=''};
+$('undo').onclick=function(){rows.pop();save();render()};
+$('clr').onclick=function(){var b=$('clr');if(!clrArm){clrArm=1;b.textContent='¿Seguro? Toca otra vez';setTimeout(function(){clrArm=0;b.textContent='Borrar todo'},3000);return}
+ rows=[];pend=[];save();clrArm=0;b.textContent='Borrar todo';$('start').textContent='▶ Iniciar';$('lvl').textContent='--';$('clock').textContent='0 s';render()};
+function csvText(){var q=function(s){return /[",;\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+ return 't_s,nivel_dB,acontecimiento\n'+rows.map(function(r){return r.t+','+(r.v===null?'':r.v.toFixed(1))+','+q(r.e)}).join('\n')+'\n'}
+$('exp').onclick=function(){
+ if(!rows.length){msg('Aún no hay datos para exportar.');return}
+ var txt=csvText();$('csv').value=txt;
+ var name='nivel_sonoro_'+new Date().toISOString().slice(0,16).replace(/[:T]/g,'-')+'.csv';
+ var done=function(){$('csvBox').hidden=false};
+ if(window.claude&&claude.use){claude.use('downloads').then(function(d){
+  if(!d){done();return}
+  d.save({filename:name,data:'\ufeff'+txt}).then(function(){msg('Archivo guardado.')}).catch(function(e){if(!e||e.code!=='declined')done()})
+ }).catch(done)}else{try{var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+txt],{type:'text/csv'}));a.download=name;document.body.appendChild(a);a.click();a.remove();msg('Archivo descargado.')}catch(e){done()}}};
+render();
+})();
+</script>
+</body>
+</html>
